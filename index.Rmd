@@ -1,0 +1,175 @@
+---
+title: "Practical Machine Learning Course project"
+author: "Kirill Shmidt"
+date: '29 февраля 2016 г '
+output: html_document
+---
+
+```{r setup, include=FALSE}
+library(caret)
+load("envi.R.RData")
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+#Abstract
+
+Using devices such as Jawbone Up, Nike FuelBand, and Fitbit it is now possible to collect a large amount of data about personal activity relatively inexpensively. In this project, I use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal of your project is to predict the manner in which they did the exercise.
+
+#Results
+I got 20/20 correct results with gbm prediction model.
+Results of modeling:
+```{r echo=FALSE}
+
+finalpred
+
+```
+
+#Data summary
+
+I have data sets diveded in two subsets:
+
+*Training - 19216 observations
+(Testing - 20 observation. below i call it Final Testing.
+
+General goal of this work is prediction of exrecise performed in testing set
+
+Sets consist of 160 variables:
+
+1. Index
+
+2. name of person, who performed observation
+
+3-5. Time stamps and window information
+
+6-159. Data from accelerometers
+
+160. Performed action in observation
+
+#Data preprocessing
+
+1. Clearing - many colomn have NA or blank data. I dicided to delete this colomns. 
+
+2. First 7 colomns doesnt carry any neccesary information about repforming action
+
+3. Rows with variable "newwindow" = "yes" is summary of other rows. Our testing set doesn't have rows with variable "newwindow" = "yes", so i delete this rows.
+
+Colomns in analysys after clearing: 
+8:11, 37:49, 60:68, 84:86, 102, 113:124, 140,151:160
+
+4. For estimation of out of sample error training set was subseted in two groups: training subset(80% of observations), testing subset (20% of observations)
+
+```{r echo=F}
+library(caret)
+load("envi.R.RData")
+```
+
+```{r echo=TRUE, eval=F}
+tra <- training[training$new_window=="no",c(8:11, 37:49, 60:68, 84:86, 102, 113:124, 140,151:160)]
+tra[,1:52] <- sapply(tra[,1:52], FUN = as.character)
+tra[,1:52] <- sapply(tra[,1:52], FUN = as.numeric)
+tes <- testing[,c(8:11, 37:49, 60:68, 84:86, 102, 113:124, 140,151:160)]
+tes[,1:52] <- sapply(tes[,1:52], FUN = as.character)
+tes[,1:52] <- sapply(tes[,1:52], FUN = as.numeric)
+
+inTrain <- createDataPartition(tra[,53], p=0.8, list=F)
+tra_training <- tra[inTrain,]
+tra_testing <- tra[-inTrain,]
+```
+
+
+#Prediction models
+Used methods with caret package with defaults options:
+
+1. rpart
+
+2. lda
+
+3. gbm
+
+#Results of modeling
+
+I perform prediction of testing subset using models builded on training subset. I diceded to use accuracy as measure of out of sample error.
+Best model should be used on Final Testing data set.
+
+*rpart
+```{r echo=FALSE}
+
+confusionMatrix(tra_testing$classe, predTree)
+```
+
+*lda
+```{r echo=FALSE}
+
+confusionMatrix(tra_testing$classe, predlda)
+```
+
+*gbm
+```{r echo=FALSE}
+confusionMatrix(tra_testing$classe, predgbm)
+```
+
+gbm have the best accuracy. This model was used in Final Testing.
+
+#Final testing
+
+I got 20/20 correct results with gbm prediction model.
+Results of model:
+```{r echo=FALSE}
+
+finalpred
+
+```
+
+#Appendix
+
+Full code
+
+```{r echo=TRUE, eval=F}
+
+library(caret)
+
+# readind data
+training <-read.csv("pml-training.csv")
+testing <- read.csv("pml-testing.csv")
+
+# delete unnesessaity variable - id, names, time stamps, etc
+# maybe delete all data with NA and with blank fields?
+#Clear off window = YES becose we dont have such data in testing
+
+
+tra <- training[training$new_window=="no",c(8:11, 37:49, 60:68, 84:86, 102, 113:124, 140,151:160)]
+tra[,1:52] <- sapply(tra[,1:52], FUN = as.character)
+tra[,1:52] <- sapply(tra[,1:52], FUN = as.numeric)
+tes <- testing[,c(8:11, 37:49, 60:68, 84:86, 102, 113:124, 140,151:160)]
+tes[,1:52] <- sapply(tes[,1:52], FUN = as.character)
+tes[,1:52] <- sapply(tes[,1:52], FUN = as.numeric)
+
+#cross validation. Main idea - create 2 subsets of "training data" witch can be used for OOS measure
+#Final testing set would be our final check, after ill find best model
+inTrain <- createDataPartition(tra[,53], p=0.8, list=F)
+tra_training <- tra[inTrain,]
+tra_testing <- tra[-inTrain,]
+
+#For parralel calcalation
+cores <- 4
+cl <- makeCluster(cores)
+registerDoParallel(cores)
+
+modelTree <- train(tra_training$classe~., data=tra_training, method="rpart")
+
+modellda <- train(tra_training$classe~., data=tra_training, method="lda")
+
+modelgbm <- train(tra_training$classe~., data=tra_training, method="gbm")
+
+stopCluster(cl)
+
+predTree <- predict(modelTree,tra_testing)
+predlda <- predict(modellda, tra_testing)
+predgbm <- predict(modelgbm, tra_testing)
+
+confusionMatrix(tra_testing$classe, predTree)
+confusionMatrix(tra_testing$classe, predlda)
+confusionMatrix(tra_testing$classe, predgbm)
+
+finalpred <- predict(modelgbm, tes)
+```
